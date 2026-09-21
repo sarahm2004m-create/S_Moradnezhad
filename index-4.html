@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neon Snake</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{min-height:100vh;display:flex;justify-content:center;align-items:center;background:radial-gradient(circle at top,#16233a 0%,#080b12 45%,#030408 100%);color:#fff;font-family:Arial,Tahoma,sans-serif;overflow-x:hidden}
+.game-wrapper{width:min(94vw,620px);padding:20px}
+.title{text-align:center;margin-bottom:18px}
+.title h1{font-size:clamp(28px,7vw,48px);letter-spacing:4px;color:#00ffcc;text-shadow:0 0 5px #00ffcc,0 0 15px #00ffcc,0 0 30px rgba(0,255,204,.5)}
+.title p{margin-top:5px;color:#77839b;font-size:13px}
+.score-board{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:15px}
+.score-box{padding:12px;text-align:center;border:1px solid rgba(0,255,204,.2);border-radius:12px;background:rgba(10,18,30,.8)}
+.score-label{display:block;color:#76839b;font-size:12px;margin-bottom:4px}
+.score-value{color:#00ffcc;font-size:25px;font-weight:bold;text-shadow:0 0 10px rgba(0,255,204,.6)}
+.canvas-container{position:relative;width:100%;aspect-ratio:1/1;border-radius:18px;padding:5px;background:linear-gradient(135deg,#00ffcc,#008cff,#a000ff);box-shadow:0 0 15px rgba(0,255,204,.25),0 0 50px rgba(0,140,255,.12)}
+canvas{display:block;width:100%;height:100%;border-radius:14px;background:#05080e}
+.game-message{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;pointer-events:none;text-align:center;border-radius:14px;background:rgba(2,5,10,.55);opacity:0;transition:opacity .25s}
+.game-message.show{opacity:1}
+.game-message h2{color:#00ffcc;font-size:clamp(24px,6vw,38px);text-shadow:0 0 15px #00ffcc}
+.game-message p{margin-top:8px;color:#b7c2d4;font-size:14px}
+.controls{display:flex;gap:10px;margin-top:16px}
+button{flex:1;border:1px solid rgba(0,255,204,.35);border-radius:11px;padding:12px 10px;color:#dffefa;background:#0b1420;font-size:14px;font-weight:bold;cursor:pointer;transition:transform .15s,background .15s,box-shadow .15s;-webkit-tap-highlight-color:transparent}
+button:hover{background:#102332;box-shadow:0 0 15px rgba(0,255,204,.15)}
+button:active{transform:scale(.95)}
+.start-btn{border-color:#00ffcc;color:#00ffcc}.pause-btn{border-color:#00aaff;color:#00aaff}.restart-btn{border-color:#ff3b81;color:#ff3b81}
+.mobile-controls{display:none;margin:20px auto 0;width:min(230px,75vw);user-select:none}
+.direction-row{display:flex;justify-content:center;gap:10px;margin-bottom:10px}.direction-row.middle{justify-content:space-between}
+.direction-btn{flex:0 0 65px;width:65px;height:55px;padding:0;font-size:25px;border-radius:14px;background:#0b1522;border:1px solid rgba(0,255,204,.3);color:#00ffcc}
+.help{margin-top:15px;text-align:center;color:#5d6a80;font-size:12px;line-height:1.8}.help span{color:#00ffcc}
+@media(max-width:600px){body{align-items:flex-start}.game-wrapper{padding:14px;margin-top:10px}.controls{gap:7px}.controls button{font-size:12px;padding:11px 6px}.mobile-controls{display:block}.help{display:none}}
+</style>
+</head>
+<body>
+<main class="game-wrapper">
+<div class="title"><h1>NEON SNAKE</h1><p>کلاسیک، سریع و نئونی</p></div>
+<div class="score-board">
+<div class="score-box"><span class="score-label">امتیاز</span><span id="score" class="score-value">0</span></div>
+<div class="score-box"><span class="score-label">بهترین امتیاز</span><span id="highScore" class="score-value">0</span></div>
+</div>
+<div class="canvas-container">
+<canvas id="gameCanvas" width="600" height="600"></canvas>
+<div id="gameMessage" class="game-message show"><h2>آماده‌ای؟</h2><p>برای شروع روی Start بزن</p></div>
+</div>
+<div class="controls">
+<button class="start-btn" id="startBtn">▶ شروع</button>
+<button class="pause-btn" id="pauseBtn">Ⅱ توقف</button>
+<button class="restart-btn" id="restartBtn">↻ شروع مجدد</button>
+</div>
+<div class="mobile-controls">
+<div class="direction-row"><button class="direction-btn" data-direction="up">▲</button></div>
+<div class="direction-row middle"><button class="direction-btn" data-direction="left">◀</button><button class="direction-btn" data-direction="right">▶</button></div>
+<div class="direction-row"><button class="direction-btn" data-direction="down">▼</button></div>
+</div>
+<div class="help">حرکت با <span>کلیدهای جهت‌دار</span> کیبورد<br>خوردن غذا = <span>+10 امتیاز</span></div>
+</main>
+<script>
+const canvas=document.getElementById("gameCanvas"),ctx=canvas.getContext("2d");
+const scoreElement=document.getElementById("score"),highScoreElement=document.getElementById("highScore"),gameMessage=document.getElementById("gameMessage");
+const startBtn=document.getElementById("startBtn"),pauseBtn=document.getElementById("pauseBtn"),restartBtn=document.getElementById("restartBtn");
+const GRID_SIZE=20,CELL_SIZE=canvas.width/GRID_SIZE,FOOD_SCORE=10,INITIAL_SPEED=150,MIN_SPEED=55,SPEED_INCREMENT=2;
+let snake=[],food={},direction={x:1,y:0},nextDirection={x:1,y:0},score=0;
+let highScore=Number(localStorage.getItem("neonSnakeHighScore"))||0;
+let gameRunning=false,gamePaused=false,gameOver=false,lastTime=0,accumulator=0;
+highScoreElement.textContent=highScore;
+
+function resetGame(){
+ snake=[{x:10,y:10},{x:9,y:10},{x:8,y:10}];direction={x:1,y:0};nextDirection={x:1,y:0};
+ score=0;gameRunning=false;gamePaused=false;gameOver=false;accumulator=0;scoreElement.textContent=score;
+ createFood();showMessage("آماده‌ای؟","برای شروع روی Start بزن");draw();
+}
+function createFood(){
+ let valid=false;
+ while(!valid){food={x:Math.floor(Math.random()*GRID_SIZE),y:Math.floor(Math.random()*GRID_SIZE)};
+ valid=!snake.some(s=>s.x===food.x&&s.y===food.y);}
+}
+function getGameSpeed(){return Math.max(MIN_SPEED,INITIAL_SPEED-(score/FOOD_SCORE)*SPEED_INCREMENT)}
+function startGame(){
+ if(gameOver)resetGame();
+ gameRunning=true;gamePaused=false;hideMessage();lastTime=performance.now();accumulator=0;requestAnimationFrame(gameLoop);
+}
+function togglePause(){
+ if(!gameRunning||gameOver)return;
+ gamePaused=!gamePaused;
+ if(gamePaused)showMessage("بازی متوقف شد","برای ادامه دوباره Pause را بزن");
+ else{hideMessage();lastTime=performance.now();accumulator=0;requestAnimationFrame(gameLoop)}
+}
+function gameLoop(currentTime){
+ if(!gameRunning||gamePaused||gameOver)return;
+ const deltaTime=currentTime-lastTime;lastTime=currentTime;accumulator+=deltaTime;const speed=getGameSpeed();
+ while(accumulator>=speed){update();accumulator-=speed;if(gameOver)break}
+ draw();if(!gameOver)requestAnimationFrame(gameLoop);
+}
+function update(){
+ direction={...nextDirection};const head=snake[0],newHead={x:head.x+direction.x,y:head.y+direction.y};
+ if(newHead.x<0||newHead.x>=GRID_SIZE||newHead.y<0||newHead.y>=GRID_SIZE){endGame();return}
+ const hitsBody=snake.some(s=>s.x===newHead.x&&s.y===newHead.y);
+ if(hitsBody){endGame();return}
+ snake.unshift(newHead);
+ if(newHead.x===food.x&&newHead.y===food.y){
+  score+=FOOD_SCORE;scoreElement.textContent=score;
+  if(score>highScore){highScore=score;highScoreElement.textContent=highScore;localStorage.setItem("neonSnakeHighScore",highScore)}
+  createFood();
+ }else snake.pop();
+}
+function endGame(){
+ gameOver=true;gameRunning=false;
+ if(score>highScore){highScore=score;localStorage.setItem("neonSnakeHighScore",highScore);highScoreElement.textContent=highScore}
+ showMessage("GAME OVER",`امتیاز شما: ${score} — برای بازی مجدد Restart را بزن`);draw();
+}
+function draw(){
+ ctx.fillStyle="#05080e";ctx.fillRect(0,0,canvas.width,canvas.height);drawGrid();drawFood();drawSnake();
+}
+function drawGrid(){
+ ctx.strokeStyle="rgba(0,255,204,.055)";ctx.lineWidth=1;
+ for(let i=0;i<=GRID_SIZE;i++){const p=i*CELL_SIZE;ctx.beginPath();ctx.moveTo(p,0);ctx.lineTo(p,canvas.height);ctx.stroke();ctx.beginPath();ctx.moveTo(0,p);ctx.lineTo(canvas.width,p);ctx.stroke()}
+}
+function drawFood(){
+ const cx=food.x*CELL_SIZE+CELL_SIZE/2,cy=food.y*CELL_SIZE+CELL_SIZE/2,r=CELL_SIZE*.27;
+ const g=ctx.createRadialGradient(cx,cy,1,cx,cy,CELL_SIZE*.7);g.addColorStop(0,"rgba(255,50,130,.9)");g.addColorStop(1,"rgba(255,50,130,0)");
+ ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,CELL_SIZE*.7,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle="#ff3b81";ctx.shadowColor="#ff3b81";ctx.shadowBlur=18;ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+ ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(cx-r*.35,cy-r*.35,r*.25,0,Math.PI*2);ctx.fill();
+}
+function drawSnake(){
+ snake.forEach((s,i)=>{
+  const pad=2,x=s.x*CELL_SIZE+pad,y=s.y*CELL_SIZE+pad,size=CELL_SIZE-pad*2;
+  if(i===0){const g=ctx.createLinearGradient(x,y,x+size,y+size);g.addColorStop(0,"#00ffcc");g.addColorStop(1,"#00aaff");ctx.fillStyle=g;ctx.shadowColor="#00ffcc";ctx.shadowBlur=15}
+  else{ctx.fillStyle=`rgba(0,255,204,${Math.max(.35,1-i*.025)})`;ctx.shadowColor="#00ffcc";ctx.shadowBlur=8}
+  roundRect(ctx,x,y,size,size,5);ctx.fill();ctx.shadowBlur=0;if(i===0)drawSnakeEyes(x,y,size);
+ });
+}
+function drawSnakeEyes(x,y,size){
+ ctx.fillStyle="#021016";let e1,e2;
+ if(direction.x!==0){const ex=direction.x>0?x+size*.68:x+size*.32;e1={x:ex,y:y+size*.32};e2={x:ex,y:y+size*.68}}
+ else{const ey=direction.y>0?y+size*.68:y+size*.32;e1={x:x+size*.32,y:ey};e2={x:x+size*.68,y:ey}}
+ ctx.beginPath();ctx.arc(e1.x,e1.y,size*.09,0,Math.PI*2);ctx.arc(e2.x,e2.y,size*.09,0,Math.PI*2);ctx.fill();
+}
+function roundRect(c,x,y,w,h,r){
+ c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadraticCurveTo(x+w,y,x+w,y+r);c.lineTo(x+w,y+h-r);c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);c.lineTo(x+r,y+h);c.quadraticCurveTo(x,y+h,x,y+h-r);c.lineTo(x,y+r);c.quadraticCurveTo(x,y,x+r,y);c.closePath();
+}
+function changeDirection(nx,ny){if(nx===-direction.x&&ny===-direction.y)return;nextDirection={x:nx,y:ny}}
+document.addEventListener("keydown",e=>{
+ switch(e.key){case"ArrowUp":e.preventDefault();changeDirection(0,-1);break;case"ArrowDown":e.preventDefault();changeDirection(0,1);break;case"ArrowLeft":e.preventDefault();changeDirection(-1,0);break;case"ArrowRight":e.preventDefault();changeDirection(1,0);break;case" ":e.preventDefault();togglePause();break}
+});
+document.querySelectorAll(".direction-btn").forEach(b=>{
+ const h=e=>{e.preventDefault();const d=b.dataset.direction;if(d==="up")changeDirection(0,-1);if(d==="down")changeDirection(0,1);if(d==="left")changeDirection(-1,0);if(d==="right")changeDirection(1,0)};
+ b.addEventListener("touchstart",h,{passive:false});b.addEventListener("mousedown",h);
+});
+function showMessage(title,text){gameMessage.innerHTML=`<h2>${title}</h2><p>${text}</p>`;gameMessage.classList.add("show")}
+function hideMessage(){gameMessage.classList.remove("show")}
+startBtn.addEventListener("click",startGame);pauseBtn.addEventListener("click",togglePause);restartBtn.addEventListener("click",()=>{resetGame();startGame()});
+resetGame();
+</script>
+</body>
+</html>
